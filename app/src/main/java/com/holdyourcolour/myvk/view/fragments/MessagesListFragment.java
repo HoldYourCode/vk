@@ -1,5 +1,7 @@
 package com.holdyourcolour.myvk.view.fragments;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -13,21 +15,21 @@ import android.widget.Button;
 import android.widget.EditText;
 
 import com.holdyourcolour.myvk.R;
-import com.holdyourcolour.myvk.api.VKApiMessagesExtension;
 import com.holdyourcolour.myvk.controller.adapters.MessageAdapter;
-import com.holdyourcolour.myvk.model.Message;
-import com.holdyourcolour.myvk.view.activities.MainActivity;
+import com.holdyourcolour.myvk.data.model.messages.message.GetVKMessagesResponse;
+import com.holdyourcolour.myvk.data.model.messages.message.VKMessagesResponse;
+import com.holdyourcolour.myvk.data.remote.ApiUtils;
+import com.holdyourcolour.myvk.data.remote.VKApi;
+import com.holdyourcolour.myvk.database.VKSession;
 import com.vk.sdk.api.VKApiConst;
 import com.vk.sdk.api.VKError;
 import com.vk.sdk.api.VKParameters;
 import com.vk.sdk.api.VKRequest;
 import com.vk.sdk.api.VKResponse;
-import com.vk.sdk.api.model.VKApiGetMessagesResponse;
-import com.vk.sdk.api.model.VKApiMessage;
-import com.vk.sdk.api.model.VKList;
 
-import java.util.ArrayList;
-import java.util.List;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 /**
  * Created by uadn_mei on 3/1/17.
@@ -38,13 +40,17 @@ public class MessagesListFragment  extends Fragment{
     private RecyclerView mRecyclerView;
     private MessageAdapter mMessagesAdapter;
     private RecyclerView.LayoutManager mLayoutManager;
-    private int mUserId;
+    private String mUserId;
+    private Bitmap mPhoto;
+    private VKApi mVKApiService;
+    private VKSession mVKSession;
 
 
-    public static MessagesListFragment newInstance(int userId) {
+    public static MessagesListFragment newInstance(String userId, byte[] photo) {
         MessagesListFragment f = new MessagesListFragment();
         Bundle args = new Bundle();
-        args.putInt("user_id", userId);
+        args.putString("user_id", userId);
+        args.putByteArray("photo", photo);
         f.setArguments(args);
         return f;
     }
@@ -54,7 +60,9 @@ public class MessagesListFragment  extends Fragment{
         Log.d(TAG, "onCreate()");
         super.onCreate(savedInstanceState);
         if (getArguments() != null) {
-            mUserId = getArguments().getInt("user_id", 0);
+            mUserId = getArguments().getString("user_id");
+            byte[] photoArray = getArguments().getByteArray("photo");
+            mPhoto = BitmapFactory.decodeByteArray(photoArray, 0, photoArray.length);
         }
         Log.d(TAG, "onCreate() userId=" + mUserId);
     }
@@ -67,7 +75,10 @@ public class MessagesListFragment  extends Fragment{
         mRecyclerView = (RecyclerView) view.findViewById(R.id.recycler_view);
         // use a linear layout manager
         mLayoutManager = new LinearLayoutManager(getContext());
+        ((LinearLayoutManager)mLayoutManager).setStackFromEnd(true);
         mRecyclerView.setLayoutManager(mLayoutManager);
+        mVKApiService = ApiUtils.getVKApiService();
+        mVKSession = VKSession.getInstance(getContext());
         getMessageByUserID();
         final EditText sendMessageEditText = (EditText) view.findViewById(R.id.sendMessageEditText);
         Button sendMessageButton = (Button) view.findViewById(R.id.sendMessageButton);
@@ -99,32 +110,27 @@ public class MessagesListFragment  extends Fragment{
 
     private void getMessageByUserID() {
         Log.d(TAG, "getMessageByUserID() " + mUserId);
-        VKRequest messagesRequest = new VKApiMessagesExtension().getHistory(VKParameters.from(VKApiConst.USER_ID, String.valueOf(mUserId)));
-        messagesRequest.executeWithListener(new VKRequest.VKRequestListener() {
+        mVKApiService.getMessages("25", mUserId, mVKSession.getAccessToken(), ApiUtils.API_VERSION).enqueue(new Callback<GetVKMessagesResponse>() {
             @Override
-            public void onComplete(VKResponse response) {
-                super.onComplete(response);
-                Log.d(TAG, "getMessageByUserID() onComplete() response = " + response);
-                VKApiGetMessagesResponse getMessagesResponse = (VKApiGetMessagesResponse) response.parsedModel;
-                Log.d(TAG, "Messages with : " + mUserId + " getMessagesResponse count = " + getMessagesResponse.count);
-                Log.d(TAG, "Messages with : " + mUserId + " getMessagesResponse items = " + getMessagesResponse.items.size());
-                VKList<VKApiMessage> messagesList = getMessagesResponse.items;
-                List<Message> messages = new ArrayList<>();
-                for (VKApiMessage message : messagesList){
-                    Log.d(TAG, "user:" + mUserId + " message: " + message.body);
-                    //Message msg = Message.parseMessage(message);
-                    //messages.add(msg);
+            public void onResponse(Call<GetVKMessagesResponse> call, Response<GetVKMessagesResponse> response) {
+                if (response.isSuccessful()){
+                    Log.d(TAG, "getMessages RESPONSE: " + response.toString());
+                    VKMessagesResponse messagesResponse = response.body().getResponse();
+                    Log.d(TAG, "messagesResponse = " + messagesResponse);
+                    mMessagesAdapter = new MessageAdapter(MessagesListFragment.this, messagesResponse.getItems(), mPhoto);
+                    mRecyclerView.setAdapter(mMessagesAdapter);
+                } else {
+                    int statusCode = response.code();
+                    Log.d(TAG, "getDialogs RESPONSE: status = " + statusCode);
                 }
-                mMessagesAdapter = new MessageAdapter(getActivity(), messages);
-                mRecyclerView.setAdapter(mMessagesAdapter);
             }
 
             @Override
-            public void onError(VKError error) {
-                super.onError(error);
-                Log.d(TAG, "getMessageByUserID() onError() error = " + error);
+            public void onFailure(Call<GetVKMessagesResponse> call, Throwable t) {
+                Log.e(TAG, "onFailure:" + call.toString(), t);
             }
         });
+
     }
 
 }

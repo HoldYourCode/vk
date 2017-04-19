@@ -1,6 +1,8 @@
 package com.holdyourcolour.myvk.controller.adapters;
 
-import android.support.v4.app.FragmentActivity;
+import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
+import android.support.v4.app.Fragment;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -10,21 +12,12 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.holdyourcolour.myvk.R;
-import com.holdyourcolour.myvk.api.VKApiPhotosExtension;
-import com.holdyourcolour.myvk.model.Message;
+import com.holdyourcolour.myvk.data.model.messages.message.VKMessage;
+import com.holdyourcolour.myvk.database.VKSession;
 import com.squareup.picasso.Picasso;
-import com.vk.sdk.api.VKApi;
-import com.vk.sdk.api.VKApiConst;
-import com.vk.sdk.api.VKError;
-import com.vk.sdk.api.VKParameters;
-import com.vk.sdk.api.VKRequest;
-import com.vk.sdk.api.VKResponse;
-import com.vk.sdk.api.methods.VKApiUsers;
-import com.vk.sdk.api.model.VKApiPhoto;
-import com.vk.sdk.api.model.VKApiUser;
-import com.vk.sdk.api.model.VKList;
-import com.vk.sdk.api.model.VKPhotoArray;
+import com.squareup.picasso.Target;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -33,28 +26,51 @@ import java.util.List;
 
 public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private static final String TAG = MessageAdapter.class.getSimpleName();
-    private List<Message> mMessages;
-    private FragmentActivity mContext;
+    private List<VKMessage> mMessages;
+    private Fragment mFragment;
+    private Bitmap mUserPhoto;
+    private Bitmap mOwnerPhoto;
+    private VKSession mVKSession;
 
-    // Provide a suitable constructor (depends on the kind of dataset)
-    public MessageAdapter(FragmentActivity context, List<Message> messages) {
-        mContext = context;
+    public MessageAdapter(Fragment fragment, List<VKMessage> messages, Bitmap userPhoto) {
+        mVKSession = VKSession.getInstance(fragment.getContext());
+        mFragment = fragment;
+        // reverse list
+        Collections.reverse(messages);
         mMessages = messages;
+        mUserPhoto = userPhoto;
+        Picasso.with(fragment.getContext()).load(mVKSession.getUserPhotoUrl()).into(new Target() {
+            @Override
+            public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+                mOwnerPhoto = bitmap;
+            }
+
+            @Override
+            public void onBitmapFailed(Drawable errorDrawable) {
+
+            }
+
+            @Override
+            public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+            }
+        });
     }
 
-    // Create new views (invoked by the layout manager)
     @Override
     public  RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         switch (viewType) {
+            // from user
             case 0: return new ViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.item_message_from, parent, false));
+            // from me
             case 1: return new ViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.item_message_to, parent, false));
-            default: return new ViewHolder(new View(mContext));
+            default: return new ViewHolder(new View(mFragment.getContext()));
         }
     }
 
     @Override
     public int getItemViewType(int position) {
-        if(mMessages.get(position).getOut())
+        if(mMessages.get(position).getOut() == 1)
             return 1;
         return 0;
     }
@@ -62,57 +78,25 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     @Override
     public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
         ViewHolder viewHolder = (ViewHolder)holder;
-        Message message = mMessages.get(position);
-        int userId = mMessages.get(position).getUserId();
-        PhotoListener listener = new PhotoListener(viewHolder);
-        getAvatar(userId, listener);
-        //Picasso.with(mContext).load(getAvatar(userId)).into(viewHolder.mAvatarImageView);
+        VKMessage message = mMessages.get(position);
         viewHolder.mMessageTextView.setText(message.getBody());
-    }
-
-    class PhotoListener {
-        ViewHolder holder;
-        PhotoListener(ViewHolder holder){
-            this.holder = holder;
-        }
-        public String onResponse(String photoUrl){
-            Picasso.with(mContext).load(photoUrl).into(holder.mAvatarImageView);
-            return photoUrl;
+        if(getItemViewType(position) == 0){
+            Log.d(TAG, "user photo");
+            viewHolder.mAvatarImageView.setImageBitmap(mUserPhoto);
+        } else {
+            Log.d(TAG, "user photo else ");
+            viewHolder.mAvatarImageView.setImageBitmap(mOwnerPhoto);
         }
     }
 
-    private void getAvatar(final int userId, final PhotoListener listener) {
-        VKRequest requestPhoto = new VKApiPhotosExtension().getPhotos(VKParameters.from(VKApiConst.OWNER_ID,
-                userId, VKApiConst.ALBUM_ID, "profile"));
-        requestPhoto.executeWithListener(new VKRequest.VKRequestListener() {
-            @Override
-            public void onComplete(VKResponse response) {
-                super.onComplete(response);
-                Log.d(TAG, "getAvatar() onComplete() response = " + response);
-                VKPhotoArray avataraArray = (VKPhotoArray) response.parsedModel;
-                Log.d("PHOTO", avataraArray.get(avataraArray.size()-1).photo_75);
-                listener.onResponse(avataraArray.get(avataraArray.size()-1).photo_75);
-            }
 
-            @Override
-            public void onError(VKError error) {
-                super.onError(error);
-                Log.d(TAG, "getAvatar() onError() error = " + error);
-            }
-        });
-    }
 
-    // Return the size of your dataset (invoked by the layout manager)
     @Override
     public int getItemCount() {
         return mMessages.size();
     }
 
-    // Provide a reference to the views for each data item
-    // Complex data items may need more than one view per item, and
-    // you provide access to all the views for a data item in a view holder
     class ViewHolder extends RecyclerView.ViewHolder {
-        // each data item is just a string in this case
         TextView mMessageTextView;
         ImageView mAvatarImageView;
         ViewHolder(View v) {

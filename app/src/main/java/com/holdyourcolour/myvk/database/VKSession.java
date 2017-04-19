@@ -15,6 +15,7 @@ public class VKSession {
     private static final String SHARED = "VK_Preferences";
     private static final String OWNER_ID = "username";
     private static final String ACCESS_TOKEN = "access_token";
+    private static String USER_PHOTO_URL;
 
     public static VKSession getInstance(Context context){
         if (sInstance == null){
@@ -32,6 +33,22 @@ public class VKSession {
         mEditor.putString(ACCESS_TOKEN, accessToken);
         mEditor.putString(OWNER_ID, ownerId);
         mEditor.commit();
+    }
+
+    /**
+     * Store uowner photo url
+     */
+    public void setOwnerPhotoURL(String photoURL){
+        mEditor.putString(USER_PHOTO_URL, photoURL);
+        mEditor.commit();
+    }
+
+    /**
+     * Get onwer photo url
+     * @return User photo url
+     */
+    public String getUserPhotoUrl() {
+        return mSharedPreferences.getString(USER_PHOTO_URL, null);
     }
 
     /**

@@ -9,62 +9,70 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
 
 import com.holdyourcolour.myvk.R;
-import com.holdyourcolour.myvk.api.RequestCompleted;
-import com.holdyourcolour.myvk.api.VKApiPhotosExtension;
 import com.holdyourcolour.myvk.controller.adapters.DialogAdapter;
-import com.holdyourcolour.myvk.controller.adapters.MessageAdapter;
-import com.holdyourcolour.myvk.model.Dialog;
-import com.holdyourcolour.myvk.model.Message;
-import com.holdyourcolour.myvk.threads.FetchDialogs;
-import com.holdyourcolour.myvk.view.activities.MainActivity;
-import com.vk.sdk.api.VKApi;
-import com.vk.sdk.api.VKApiConst;
-import com.vk.sdk.api.VKError;
-import com.vk.sdk.api.VKParameters;
-import com.vk.sdk.api.VKRequest;
-import com.vk.sdk.api.VKResponse;
-import com.vk.sdk.api.model.VKApiDialog;
-import com.vk.sdk.api.model.VKApiGetDialogResponse;
-import com.vk.sdk.api.model.VKList;
-import com.vk.sdk.api.model.VKPhotoArray;
+import com.holdyourcolour.myvk.data.model.messages.dialog.VKDialogsResponse;
+import com.holdyourcolour.myvk.data.model.messages.dialog.GetVKDialogsResponse;
+import com.holdyourcolour.myvk.data.remote.ApiUtils;
+import com.holdyourcolour.myvk.data.remote.VKApi;
+import com.holdyourcolour.myvk.database.VKSession;
 
 
-import java.util.ArrayList;
-import java.util.List;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 /**
  * Created by uadn_mei on 2/27/17.
  */
 
-public class DialogsListFragment extends Fragment implements RequestCompleted{
+public class DialogsListFragment extends Fragment {
 
     private static final String TAG = DialogsListFragment.class.getSimpleName();
     private RecyclerView mRecyclerView;
     private DialogAdapter mDialogAdapter;
     private RecyclerView.LayoutManager mLayoutManager;
+    private VKApi mVKApiService;
+    private VKSession mVKSession;
 
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_dialogs_list, container, false);
+        mVKApiService = ApiUtils.getVKApiService();
+        mVKSession = VKSession.getInstance(getContext());
         mRecyclerView = (RecyclerView) view.findViewById(R.id.recycler_view);
         // use a linear layout manager
         mLayoutManager = new LinearLayoutManager(getContext());
         mRecyclerView.setLayoutManager(mLayoutManager);
-        new FetchDialogs(this).execute();
+        requestDialogs();
+        //new FetchDialogs(this).execute();
         return view;
     }
 
+    private void requestDialogs() {
+        Log.d(TAG, "GET DIALOGS REQUEST :\n" + ApiUtils.ENDPOINT + VKApi.METHOD_GET_DIALOGS +
+                "count=" + "2" + "&access_token=" + mVKSession.getAccessToken() + "&v=" + ApiUtils.API_VERSION);
+        mVKApiService.getDialogs("25", mVKSession.getAccessToken(), ApiUtils.API_VERSION).enqueue(new Callback<GetVKDialogsResponse>() {
+            @Override
+            public void onResponse(Call<GetVKDialogsResponse> call, Response<GetVKDialogsResponse> response) {
+                if (response.isSuccessful()){
+                    Log.d(TAG, "getDialogs RESPONSE: " + response.toString());
+                    VKDialogsResponse dialogsResponse = response.body().getResponse();
+                    Log.d(TAG, "dialogResponse = " + dialogsResponse);
+                    mDialogAdapter = new DialogAdapter(DialogsListFragment.this, dialogsResponse.getDialogs());
+                    mRecyclerView.setAdapter(mDialogAdapter);
+                } else {
+                    int statusCode = response.code();
+                    Log.d(TAG, "getDialogs RESPONSE: status = " + statusCode);
+                }
+            }
 
-
-    @Override
-    public void onFinish(Object response) {
-        Log.d(TAG, "onFinish");
-        List<Dialog> dialogList = (List<Dialog>) response;
-        mDialogAdapter = new DialogAdapter(this, dialogList);
-        mRecyclerView.setAdapter(mDialogAdapter);
+            @Override
+            public void onFailure(Call<GetVKDialogsResponse> call, Throwable t) {
+                Log.e(TAG, "onFailure:" + call.toString(), t);
+            }
+        });
     }
 }

@@ -21,7 +21,6 @@
         android:layout_alignTop="@+id/avatar_message"
         android:layout_marginLeft="16dp"
         android:layout_marginStart="16dp"
-        android:padding="4dp"
-        android:background="#cccccc"/>
+        android:padding="4dp"/>
 
 </RelativeLayout>

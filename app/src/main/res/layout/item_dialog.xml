@@ -15,6 +15,7 @@
             android:layout_width="@dimen/image_size"
             android:layout_height="@dimen/image_size"
             android:adjustViewBounds="true"
+            android:scaleType="centerCrop"
             android:background="@android:drawable/stat_sys_download"/>
 
         <TextView
